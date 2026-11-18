@@ -218,7 +218,7 @@ WMSX = {
     PRESETS:                        "",                         // Configuration Presets to apply. See Presets Configuration
 
     // Full or relative URL of Media files to load
-    CARTRIDGE1_URL:                 "",                         // ROM file
+    CARTRIDGE1_URL:                 "scientists.rom",           // ROM file
     CARTRIDGE2_URL:                 "",
     DISKA_URL:                      "",                         // Disk Image file
     DISKB_URL:                      "",
@@ -760,6 +760,10 @@ onSuccess:function(b){WMSX.room.fileLoader.loadFromContent(b.url,b.content,a.DIS
 
         <div id="wmsx">
             <div id="wmsx-screen"></div>
+        </div>
+
+        <div class="info container" style="text-align: center;">
+            SCIENTISTS (MSX2+) &nbsp;<a href="scientists.rom" download>ROMをダウンロード</a>
         </div>
 
         <div id="info-thin" class="info container">
