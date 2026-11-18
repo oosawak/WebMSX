@@ -795,6 +795,10 @@ onSuccess:function(b){WMSX.room.fileLoader.loadFromContent(b.url,b.content,a.DIS
 #wmsx-reg-panel{position:fixed;top:48px;right:8px;z-index:99998;background:rgba(10,10,10,.92);color:#ddd;display:none;padding:10px 12px;border:1px solid #444;border-radius:8px;font:12px/1.6 monospace;white-space:pre;max-width:92vw}
 #wmsx-reg-panel.open{display:block}
 #wmsx-reg-panel .hd{color:#9cf;font-weight:bold}
+#wmsx-reg-panel button{background:#222;color:#ddd;border:1px solid #555;border-radius:5px;padding:3px 9px;font:11px monospace;cursor:pointer}
+#wmsx-reg-note{color:#fa8;font-size:11px}
+#wmsx-reg-view{display:none;margin-top:6px;white-space:normal}
+#wmsx-reg-text{width:540px;max-width:88vw;height:180px;background:#111;color:#ddd;border:1px solid #444;border-radius:6px;font:11px/1.5 monospace;padding:6px}
 </style>
 <button id="wmsx-log-btn" type="button">LOG</button>
 <button id="wmsx-reg-btn" type="button">REG</button>
@@ -850,25 +854,69 @@ onSuccess:function(b){WMSX.room.fileLoader.loadFromContent(b.url,b.content,a.DIS
   add('log', ['log panel ready']);
 })();
 </script>
-<div id="wmsx-reg-panel"><span class="hd">CPU registers</span>
-<span id="wmsx-reg-body">(starting...)</span></div>
+<div id="wmsx-reg-panel"><span class="hd">CPU registers</span> <span id="wmsx-reg-note">表示中は速度30%</span>
+<span id="wmsx-reg-body">(starting...)</span>
+<span><button id="wmsx-reg-rec" type="button">● 記録 Start</button> <button id="wmsx-reg-open" type="button">記録を開く</button> <span id="wmsx-reg-count"></span></span>
+<div id="wmsx-reg-view"><textarea id="wmsx-reg-text" spellcheck="false" placeholder="記録すると、ここに1行ずつ貯まります。行を選んで消すこともできます"></textarea>
+<span><button id="wmsx-reg-copy" type="button">Copy</button> <button id="wmsx-reg-dl" type="button">Download</button> <button id="wmsx-reg-clear" type="button">Clear</button></span></div>
+</div>
 <script>
 (function(){
   var panel = document.getElementById('wmsx-reg-panel');
   var body = document.getElementById('wmsx-reg-body');
-  var timer = null;
+  var recBtn = document.getElementById('wmsx-reg-rec');
+  var openBtn = document.getElementById('wmsx-reg-open');
+  var view = document.getElementById('wmsx-reg-view');
+  var text = document.getElementById('wmsx-reg-text');
+  var count = document.getElementById('wmsx-reg-count');
+  var timer = null, recording = false, recStart = 0, recLines = [], viewOpen = false, textDirty = false;
+  function machine(){ try { return window.WMSX && WMSX.room && WMSX.room.machine; } catch(e) { return null; } }
   function read(){
-    try {
-      var cpu = window.WMSX && WMSX.room && WMSX.room.machine && WMSX.room.machine.cpu;
-      body.textContent = cpu ? cpu.toString() : '(not ready)';
-    } catch(e) { body.textContent = '(error: ' + e.message + ')'; }
+    var m = machine(), cpu = m && m.cpu, s;
+    if (!cpu) { body.textContent = '(not ready)'; return; }
+    try { s = cpu.toString(); } catch(e) { body.textContent = '(error: ' + e.message + ')'; return; }
+    body.textContent = s;
+    if (recording) {
+      var t = ((Date.now() - recStart) / 1000).toFixed(2);
+      recLines.push('[+' + t + 's] ' + s.replace(/\s+/g, ' ').trim());
+      if (recLines.length > 20000) recLines.shift();
+      count.textContent = recLines.length + ' 行';
+      if (viewOpen && !textDirty) text.value = recLines.join('\n');
+    }
   }
+  function ctl(code){ var m = machine(); if (!m || !m.getMachineControlsSocket) return; try { var s = m.getMachineControlsSocket(); if (s && s.controlStateChanged) s.controlStateChanged(code, true); } catch(e) {} }
+  function slow(){ for (var i = 0; i < 7; i++) ctl(114); }
+  function normal(){ ctl(115); }
+  function startRec(){ recording = true; recStart = Date.now(); recBtn.textContent = '■ 記録 Stop'; recBtn.style.color = '#f88'; }
+  function stopRec(){ recording = false; recBtn.textContent = '● 記録 Start'; recBtn.style.color = ''; }
   function setOpen(open){
     panel.classList.toggle('open', open);
-    if (open) { read(); if (!timer) timer = setInterval(read, 250); }
-    else if (timer) { clearInterval(timer); timer = null; }
+    if (open) { read(); if (!timer) timer = setInterval(read, 250); slow(); }
+    else { if (timer) { clearInterval(timer); timer = null; } if (recording) stopRec(); normal(); }
   }
+  recBtn.addEventListener('click', function(){ recording ? stopRec() : startRec(); });
+  openBtn.addEventListener('click', function(){
+    viewOpen = !viewOpen;
+    view.style.display = viewOpen ? 'block' : 'none';
+    openBtn.textContent = viewOpen ? '記録を閉じる' : '記録を開く';
+    if (viewOpen && !textDirty) text.value = recLines.join('\n');
+  });
+  text.addEventListener('input', function(){ textDirty = true; });
+  document.getElementById('wmsx-reg-copy').addEventListener('click', function(){
+    text.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text.value); else document.execCommand('copy');
+  });
+  document.getElementById('wmsx-reg-dl').addEventListener('click', function(){
+    var blob = new Blob([text.value], { type: 'text/plain' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'webmsx-registers.txt'; a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+  });
+  document.getElementById('wmsx-reg-clear').addEventListener('click', function(){
+    recLines = []; text.value = ''; textDirty = false; count.textContent = '';
+  });
   document.getElementById('wmsx-reg-btn').addEventListener('click', function(){ setOpen(!panel.classList.contains('open')); });
+  window.__wmsxReg = { slow: slow, normal: normal, ctl: ctl };
   if (location.hash.indexOf('reg') >= 0) setOpen(true);
   if (location.hash.indexOf('log') >= 0) { var p = document.getElementById('wmsx-log-panel'); if (p) p.classList.add('open'); }
 })();
